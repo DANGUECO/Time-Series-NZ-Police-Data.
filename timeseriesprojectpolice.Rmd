@@ -1,0 +1,819 @@
+---
+title: "Time series Project Police"
+author: "Dan Gueco, 300449479"
+date: "28/09/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, warning=FALSE}
+library(knitr)
+library(dplyr)
+library(tidyr)
+library(zoo)
+library(xts)
+library(lubridate)
+library(timetk)
+library(tsibble)
+library(wktmo)
+library(ggplot2)
+library(reshape2)
+library(stringr)
+library(ggpubr)
+library("forecast")
+```
+
+```{r}
+vict_17_lockdown <- read.csv('mar-jun2017.csv')
+
+#majority nans for variance columns.
+vict_17_lockdown$X..Variance <- NULL
+vict_17_lockdown$X..Variance.Test <- NULL
+#
+head(vict_17_lockdown)
+```
+
+Its known that there was one incident that had 20000+ occurences.
+```{r}
+copy <- as.data.frame(table(vict_17_lockdown$Victimisations))
+head(copy)
+```
+
+
+#Detailed data analysis
+```{r}
+copy_17 <- vict_17_lockdown[c(1,2,3,7,36,42)]
+
+#make 2 columns from year month
+#Creating a month variable.
+copy_17$Month <- substr(copy_17$Year.Month , 0, 3)
+
+head(copy_17)
+```
+
+
+Lets find all victimisation populations for each region 2018-2020
+
+```{r}
+#Specific months  apr, may and jun.
+vict.region.month.17 <- copy_17 %>%
+group_by(Police.District,Month) %>%
+summarise(TotalVictimisations = sum(Victimisations), .groups = 'drop')
+```
+
+Generally rewrite the variables.
+```{r}
+vict.region.month.17$TotalVictimisations<- as.double(vict.region.month.17$TotalVictimisations)
+
+#rename may, june, july.
+vict.region.month.17 <- vict.region.month.17%>%
+      mutate_at("Month", str_replace, "Mar", "March") 
+vict.region.month.17 <- vict.region.month.17%>%
+      mutate_at("Month", str_replace, "Apr", "April") 
+vict.region.month.17 <- vict.region.month.17%>%
+      mutate_at("Month", str_replace, "Jun", "June") 
+vict.region.month.17<- vict.region.month.17%>%
+      mutate_at("Month", str_replace, "Jul", "July") 
+
+#x_fac = factor(vict.region.month.18$Month, levels = month.name)
+
+vict.region.month.17
+```
+
+2018 auckland, wellington and Canterbury. 3 most populated regions.
+
+https://www.stats.govt.nz/information-releases/2018-census-population-and-dwelling-counts#:~:text=For%20our%20cities%20and%20districts,topping%201.5%20million%20(1%2C571%2C718). 
+
+```{r}
+#return rows only for auckland
+#head(vict.region.month)
+vict.region.month.auckland.2017 <- vict.region.month.17[vict.region.month.17[,1] == 'Auckland City',]
+vict.region.month.auckland.2017$Month <- as.character(vict.region.month.auckland.2017$Month)
+
+# census population respective of stats govt.nz. 
+Population <- 1571718
+
+#
+vict.rate.auckland <- vict.region.month.auckland.2017 %>% rowwise() %>%
+  mutate(VictimRate = TotalVictimisations/Population)
+################
+vict.rate.auckland$Month <- as.factor(vict.rate.auckland$Month)
+vict.rate.auckland$Month <- factor(vict.rate.auckland$Month, levels = month.name)
+
+extra <- vict.rate.auckland[2,]
+vict.rate.auckland <-  rbind(vict.rate.auckland,extra)
+vict.rate.auckland <- vict.rate.auckland[-c(2),]
+################
+
+vict.rate.auckland.plot  <- ggplot(vict.rate.auckland, aes(x = Month, y = VictimRate, group=1)) +
+  geom_line() +
+  labs(title = "Auckland victimisation rate 2017",
+       x = "Month",
+       y = "Victimisation Rate")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+
+#return rows only for canturbury.
+#head(vict.region.month)
+vict.region.month.Canterbury.2017 <- vict.region.month.17[vict.region.month.17[,1]== 'Canterbury',]
+vict.region.month.Canterbury.2017$Month <- as.character(vict.region.month.Canterbury.2017$Month)
+
+# census population respective of stats govt.nz. 
+Population <- 599694
+
+#
+vict.rate.Canterbury <- vict.region.month.Canterbury.2017 %>% rowwise() %>%
+  mutate(VictimRate = TotalVictimisations/Population)
+
+################
+vict.rate.Canterbury$Month <- as.factor(vict.rate.Canterbury$Month)
+vict.rate.Canterbury$Month <- factor(vict.rate.Canterbury$Month, levels = month.name)
+
+extra <- vict.rate.Canterbury[2,]
+vict.rate.Canterbury <-  rbind(vict.rate.Canterbury,extra)
+vict.rate.Canterbury <- vict.rate.Canterbury[-c(2),]
+################
+
+vict.rate.Canterbury.plot  <- ggplot(vict.rate.Canterbury, aes(x = Month, y = VictimRate, group = 1)) +
+  geom_line() +
+  labs(title = "Canterbury victimisation rate 2017",
+       x = "Month",
+       y = "Victimisation Rate")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+
+
+#return rows only for Wellington.
+#head(vict.region.month)
+vict.region.month.Wellington.2017 <- vict.region.month.17[vict.region.month.17[,1]== 'Wellington',]
+vict.region.month.Wellington.2017$Month <- as.character(vict.region.month.Wellington.2017$Month)
+
+# census population respective of stats govt.nz. 
+Population <- 411346
+
+#
+vict.rate.Wellington <- vict.region.month.Wellington.2017 %>% rowwise() %>%
+  mutate(VictimRate = TotalVictimisations/Population)
+
+################
+vict.rate.Wellington$Month <- as.factor(vict.rate.Wellington$Month)
+vict.rate.Wellington$Month <- factor(vict.rate.Wellington$Month, levels = month.name)
+
+extra <- vict.rate.Wellington[2,]
+vict.rate.Wellington <-  rbind(vict.rate.Wellington,extra)
+vict.rate.Wellington <- vict.rate.Wellington[-c(2),]
+################
+
+vict.rate.Wellington.plot  <- ggplot(vict.rate.Wellington, aes(x = Month, y = VictimRate, group = 1)) +
+  geom_line() +
+  labs(title = "Wellington victimisation rate 2017",
+       x = "Month",
+       y = "Victimisation Rate")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+
+#combine plots to form respective rates. 
+#This was done because each population is different.
+figure <- ggarrange(vict.rate.auckland.plot, 
+                    vict.rate.Canterbury.plot, 
+                    vict.rate.Wellington.plot,
+                    labels = c("1", "2", "3"),
+                    ncol = 2, nrow = 2)
+figure
+
+#Overlay each other to better represent.
+total2017 <- rbind(vict.rate.auckland,vict.rate.Wellington)
+total2017 <- rbind(total2017,vict.rate.Canterbury)
+total2017
+
+p <- ggplot(data=total2017, aes(x=Month, y=VictimRate, group=Police.District,color=Police.District)) + geom_line(size=1.5)
+p +labs(title = "Total victimisation rate 2017 Across 3 Regions (March-Jun)",x = "Month",y = "Victimisation Rate")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+
+#
+```
+
+
+
+# DETAILED ANALYSIS PART for all of 2015-2020 victimisations.
+
+```{r}
+vict_all<- read.csv('2015to2020.csv')
+head(vict_all)
+```
+
+```{r}
+vict_all$X..Variance <- NULL
+vict_all$X..Variance.Test <- NULL
+
+vict_all <- vict_all[,c(1,2,3,8,35,36,37,42)]
+head(vict_all)
+```
+
+
+```{r}
+
+#Subset and create a new month column
+vict_all$Month <- substr(vict_all$Year.Month , 0, 3)
+head(vict_all$Month)
+
+#Str replace
+vict_all<- vict_all%>%
+      mutate_at("Month", str_replace, "Jan", "January") 
+vict_all <- vict_all%>%
+      mutate_at("Month", str_replace, "Feb", "February") 
+vict_all<- vict_all%>%
+      mutate_at("Month", str_replace, "Mar", "March") 
+vict_all<- vict_all%>%
+      mutate_at("Month", str_replace, "Apr", "April") 
+
+#May does not need fixing.
+vict_all <- vict_all%>%
+      mutate_at("Month", str_replace, "Jun", "June") 
+vict_all <- vict_all%>%
+      mutate_at("Month", str_replace, "Jul", "July") 
+vict_all <- vict_all%>%
+      mutate_at("Month", str_replace, "Aug", "August") 
+vict_all <- vict_all%>%
+      mutate_at("Month", str_replace, "Sep", "September") 
+vict_all<- vict_all%>%
+      mutate_at("Month", str_replace, "Oct", "October") 
+vict_all <- vict_all%>%
+      mutate_at("Month", str_replace, "Nov", "November") 
+vict_all <- vict_all%>%
+      mutate_at("Month", str_replace, "Dec", "December") 
+```
+
+```{r}
+#Split into three datasets pertaining to each year.
+all_2015 <- vict_all[grepl("2015", vict_all[["Year.Month"]]), ]
+all_2016 <- vict_all[grepl("2016", vict_all[["Year.Month"]]), ]
+all_2017 <- vict_all[grepl("2017", vict_all[["Year.Month"]]), ]
+all_2018 <- vict_all[grepl("2018", vict_all[["Year.Month"]]), ]
+all_2019 <- vict_all[grepl("2019", vict_all[["Year.Month"]]), ]
+all_2020 <- vict_all[grepl("2020", vict_all[["Year.Month"]]), ]
+```
+
+
+
+```{r}
+#Group by months.
+
+all_2015  <- all_2015 %>%
+group_by(Police.District,Month) %>%
+summarise(TotalVictimisations = sum(Victimisations), .groups = 'drop')
+
+all_2016  <- all_2016 %>%
+group_by(Police.District,Month) %>%
+summarise(TotalVictimisations = sum(Victimisations), .groups = 'drop')
+
+all_2017  <- all_2017 %>%
+group_by(Police.District,Month) %>%
+summarise(TotalVictimisations = sum(Victimisations), .groups = 'drop')
+
+all_2018  <- all_2018 %>%
+group_by(Police.District,Month) %>%
+summarise(TotalVictimisations = sum(Victimisations), .groups = 'drop')
+
+all_2019  <- all_2019 %>%
+group_by(Police.District,Month) %>%
+summarise(TotalVictimisations = sum(Victimisations), .groups = 'drop')
+
+all_2020  <- all_2020 %>%
+group_by(Police.District,Month) %>%
+summarise(TotalVictimisations = sum(Victimisations), .groups = 'drop')
+```
+
+```{r}
+########################################################################
+
+#store only respective of the cities.
+all_2015_auckland <- all_2015[all_2015[,1] == 'Auckland City',]
+all_2015_auckland$Month <- as.character(all_2015_auckland$Month)
+all_2015_Canterbury <- all_2015[all_2015[,1] == 'Canterbury',]
+all_2015_Canterbury$Month <- as.character(all_2015_Canterbury$Month)
+all_2015_wellington  <- all_2015[all_2015[,1] == 'Wellington',]
+all_2015_wellington$Month <- as.character(all_2015_wellington$Month)
+
+#store only respective of the cities.
+all_2016_auckland <- all_2016[all_2016[,1] == 'Auckland City',]
+all_2016_auckland$Month <- as.character(all_2016_auckland$Month)
+all_2016_Canterbury <- all_2016[all_2016[,1] == 'Canterbury',]
+all_2016_Canterbury$Month <- as.character(all_2016_Canterbury$Month)
+all_2016_wellington  <- all_2016[all_2016[,1] == 'Wellington',]
+all_2016_wellington$Month <- as.character(all_2016_wellington$Month)
+
+#store only respective of the cities.
+all_2017_auckland <- all_2017[all_2017[,1] == 'Auckland City',]
+all_2017_auckland$Month <- as.character(all_2017_auckland$Month)
+all_2017_Canterbury <- all_2017[all_2017[,1] == 'Canterbury',]
+all_2017_Canterbury$Month <- as.character(all_2017_Canterbury$Month)
+all_2017_wellington  <- all_2017[all_2017[,1] == 'Wellington',]
+all_2017_wellington$Month <- as.character(all_2017_wellington$Month)
+
+#store only respective of the cities.
+all_2018_auckland <- all_2018[all_2018[,1] == 'Auckland City',]
+all_2018_auckland$Month <- as.character(all_2018_auckland$Month)
+all_2018_Canterbury <- all_2018[all_2018[,1] == 'Canterbury',]
+all_2018_Canterbury$Month <- as.character(all_2018_Canterbury$Month)
+all_2018_wellington  <- all_2018[all_2018[,1] == 'Wellington',]
+all_2018_wellington$Month <- as.character(all_2018_wellington$Month)
+
+#store only respective of the cities.
+all_2019_auckland <- all_2019[all_2019[,1] == 'Auckland City',]
+all_2019_auckland$Month <- as.character(all_2019_auckland$Month)
+all_2019_Canterbury <- all_2019[all_2019[,1] == 'Canterbury',]
+all_2019_Canterbury$Month <- as.character(all_2019_Canterbury$Month)
+all_2019_wellington  <- all_2019[all_2019[,1] == 'Wellington',]
+all_2019_wellington$Month <- as.character(all_2019_wellington$Month)
+
+#store only respective of the cities.
+all_2020_auckland <- all_2020[all_2020[,1] == 'Auckland City',]
+all_2020_auckland$Month <- as.character(all_2020_auckland$Month)
+all_2020_Canterbury <- all_2020[all_2020[,1] == 'Canterbury',]
+all_2020_Canterbury$Month <- as.character(all_2020_Canterbury$Month)
+all_2020_wellington  <- all_2020[all_2020[,1] == 'Wellington',]
+all_2020_wellington$Month <- as.character(all_2020_wellington$Month)
+
+########################################################################
+```
+
+```{r}
+#Compute victimisation rates for each year.
+#census population respective of stats govt.nz + datacommons.org
+
+#2015
+Population <- 1680500
+all_2015_auckland <- all_2015_auckland %>% rowwise() %>%
+  mutate(VictimRate = TotalVictimisations/Population)
+# census population respective of stats govt.nz. 
+Population <- 599694
+all_2015_Canterbury <-all_2015_Canterbury %>% rowwise() %>%
+  mutate(VictimRate = TotalVictimisations/Population)
+# census population respective of stats govt.nz. 
+Population <- 411346
+all_2015_wellington <- all_2015_wellington  %>% rowwise() %>%
+  mutate(VictimRate = TotalVictimisations/Population)
+
+#2016
+Population <- 1680500
+all_2016_auckland <- all_2016_auckland %>% rowwise() %>%
+  mutate(VictimRate = TotalVictimisations/Population)
+# census population respective of stats govt.nz. 
+Population <- 599694
+all_2016_Canterbury <-all_2016_Canterbury %>% rowwise() %>%
+  mutate(VictimRate = TotalVictimisations/Population)
+# census population respective of stats govt.nz. 
+Population <- 411346
+all_2016_wellington <- all_2016_wellington  %>% rowwise() %>%
+  mutate(VictimRate = TotalVictimisations/Population)
+
+#2017
+Population <- 1680500
+all_2017_auckland <- all_2017_auckland %>% rowwise() %>%
+  mutate(VictimRate = TotalVictimisations/Population)
+# census population respective of stats govt.nz. 
+Population <- 599694
+all_2017_Canterbury <-all_2017_Canterbury %>% rowwise() %>%
+  mutate(VictimRate = TotalVictimisations/Population)
+# census population respective of stats govt.nz. 
+Population <- 411346
+all_2017_wellington <- all_2017_wellington  %>% rowwise() %>%
+  mutate(VictimRate = TotalVictimisations/Population)
+
+#2018
+Population <- 1680500
+all_2018_auckland <- all_2018_auckland %>% rowwise() %>%
+  mutate(VictimRate = TotalVictimisations/Population)
+# census population respective of stats govt.nz. 
+Population <- 599694
+all_2018_Canterbury <-all_2018_Canterbury %>% rowwise() %>%
+  mutate(VictimRate = TotalVictimisations/Population)
+# census population respective of stats govt.nz. 
+Population <- 411346
+all_2018_wellington <- all_2018_wellington  %>% rowwise() %>%
+  mutate(VictimRate = TotalVictimisations/Population)
+
+#2019
+Population <- 1680500
+all_2019_auckland <- all_2019_auckland %>% rowwise() %>%
+  mutate(VictimRate = TotalVictimisations/Population)
+# census population respective of stats govt.nz. 
+Population <- 599694
+all_2019_Canterbury <-all_2019_Canterbury %>% rowwise() %>%
+  mutate(VictimRate = TotalVictimisations/Population)
+# census population respective of stats govt.nz. 
+Population <- 411346
+all_2019_wellington <- all_2019_wellington  %>% rowwise() %>%
+  mutate(VictimRate = TotalVictimisations/Population)
+
+#2020
+Population <- 1680500
+all_2020_auckland <- all_2020_auckland %>% rowwise() %>%
+  mutate(VictimRate = TotalVictimisations/Population)
+# census population respective of stats govt.nz. 
+Population <- 599694
+all_2020_Canterbury <-all_2020_Canterbury %>% rowwise() %>%
+  mutate(VictimRate = TotalVictimisations/Population)
+# census population respective of stats govt.nz. 
+Population <- 411346
+all_2020_wellington <- all_2020_wellington  %>% rowwise() %>%
+  mutate(VictimRate = TotalVictimisations/Population)
+
+```
+
+```{r}
+########################################################################
+#2015
+all_2015_auckland$Month <- as.factor(all_2015_auckland$Month)
+all_2015_auckland$Month <- factor(all_2015_auckland$Month, levels = month.name)
+all_2015_auckland$Month <- sort(all_2015_auckland$Month)
+all_2015_Canterbury$Month <- as.factor(all_2015_Canterbury$Month)
+all_2015_Canterbury$Month <- factor(all_2015_Canterbury$Month, levels = month.name)
+all_2015_Canterbury$Month <- sort(all_2015_Canterbury$Month)
+all_2015_wellington$Month <- as.factor(all_2015_wellington $Month)
+all_2015_wellington$Month <- factor(all_2015_wellington $Month, levels = month.name)
+all_2015_wellington$Month <- sort(all_2015_wellington$Month)
+
+#2016
+all_2016_auckland$Month <- as.factor(all_2016_auckland$Month)
+all_2016_auckland$Month <- factor(all_2016_auckland$Month, levels = month.name)
+all_2016_auckland$Month <- sort(all_2016_auckland$Month)
+all_2016_Canterbury$Month <- as.factor(all_2016_Canterbury$Month)
+all_2016_Canterbury$Month <- factor(all_2016_Canterbury$Month, levels = month.name)
+all_2016_Canterbury$Month <- sort(all_2016_Canterbury$Month)
+all_2016_wellington$Month <- as.factor(all_2016_wellington $Month)
+all_2016_wellington$Month <- factor(all_2016_wellington $Month, levels = month.name)
+all_2016_wellington$Month <- sort(all_2016_wellington$Month)
+
+#2017
+all_2017_auckland$Month <- as.factor(all_2017_auckland$Month)
+all_2017_auckland$Month <- factor(all_2017_auckland$Month, levels = month.name)
+all_2017_auckland$Month <- sort(all_2017_auckland$Month)
+all_2017_Canterbury$Month <- as.factor(all_2017_Canterbury$Month)
+all_2017_Canterbury$Month <- factor(all_2017_Canterbury$Month, levels = month.name)
+all_2017_Canterbury$Month <- sort(all_2017_Canterbury$Month)
+all_2017_wellington$Month <- as.factor(all_2017_wellington $Month)
+all_2017_wellington$Month <- factor(all_2017_wellington $Month, levels = month.name)
+all_2017_wellington$Month <- sort(all_2017_wellington$Month)
+
+#2018
+all_2018_auckland$Month <- as.factor(all_2018_auckland$Month)
+all_2018_auckland$Month <- factor(all_2018_auckland$Month, levels = month.name)
+all_2018_auckland$Month <- sort(all_2018_auckland$Month)
+all_2018_Canterbury$Month <- as.factor(all_2018_Canterbury$Month)
+all_2018_Canterbury$Month <- factor(all_2018_Canterbury$Month, levels = month.name)
+all_2018_Canterbury$Month <- sort(all_2018_Canterbury$Month)
+all_2018_wellington$Month <- as.factor(all_2018_wellington $Month)
+all_2018_wellington$Month <- factor(all_2018_wellington $Month, levels = month.name)
+all_2018_wellington$Month <- sort(all_2018_wellington$Month)
+
+#2019
+all_2019_auckland$Month <- as.factor(all_2019_auckland$Month)
+all_2019_auckland$Month <- factor(all_2019_auckland$Month, levels = month.name)
+all_2019_auckland$Month <- sort(all_2019_auckland$Month)
+all_2019_Canterbury$Month <- as.factor(all_2019_Canterbury$Month)
+all_2019_Canterbury$Month <- factor(all_2019_Canterbury$Month, levels = month.name)
+all_2019_Canterbury$Month <- sort(all_2019_Canterbury$Month)
+all_2019_wellington$Month <- as.factor(all_2019_wellington $Month)
+all_2019_wellington$Month <- factor(all_2019_wellington $Month, levels = month.name)
+all_2019_wellington$Month <- sort(all_2019_wellington$Month)
+
+#2019
+all_2020_auckland$Month <- as.factor(all_2020_auckland$Month)
+all_2020_auckland$Month <- factor(all_2020_auckland$Month, levels = month.name)
+all_2020_auckland$Month <- sort(all_2020_auckland$Month)
+all_2020_Canterbury$Month <- as.factor(all_2020_Canterbury$Month)
+all_2020_Canterbury$Month <- factor(all_2020_Canterbury$Month, levels = month.name)
+all_2020_Canterbury$Month <- sort(all_2020_Canterbury$Month)
+all_2020_wellington$Month <- as.factor(all_2020_wellington $Month)
+all_2020_wellington$Month <- factor(all_2020_wellington $Month, levels = month.name)
+all_2020_wellington$Month <- sort(all_2020_wellington$Month)
+
+#Overlay each other to better represent.
+#2015
+overall_2015 <- rbind(all_2015_auckland,all_2015_Canterbury)
+overall_total2015 <- rbind(overall_2015, all_2015_wellington)
+overall_total2015
+
+#2016
+overall_2016 <- rbind(all_2016_auckland,all_2016_Canterbury)
+overall_total2016 <- rbind(overall_2016, all_2016_wellington)
+overall_total2016
+
+#2017
+overall_2017 <- rbind(all_2017_auckland,all_2017_Canterbury)
+overall_total2017 <- rbind(overall_2017, all_2017_wellington)
+overall_total2017
+
+#2018
+overall_2018 <- rbind(all_2018_auckland,all_2018_Canterbury)
+overall_total2018 <- rbind(overall_2018, all_2018_wellington)
+overall_total2018
+
+#2019
+overall_2019 <- rbind(all_2019_auckland,all_2019_Canterbury)
+overall_total2019 <- rbind(overall_2019, all_2019_wellington)
+overall_total2019
+
+#2020
+overall_2020 <- rbind(all_2020_auckland,all_2020_Canterbury)
+overall_total2020 <- rbind(overall_2020, all_2020_wellington)
+overall_total2020
+
+p <- ggplot(data=overall_total2015, aes(x=Month, y=VictimRate, group=Police.District,color=Police.District)) + geom_line(size=1.5)
+p +labs(title = "Total victimisation rate 2015 Across 3 Regions (Jan-Dec)",x = "Month",y = "Victimisation Rate")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+
+p <- ggplot(data=overall_total2016, aes(x=Month, y=VictimRate, group=Police.District,color=Police.District)) + geom_line(size=1.5)
+p +labs(title = "Total victimisation rate 2016 Across 3 Regions (Jan-Dec)",x = "Month",y = "Victimisation Rate")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+
+p <- ggplot(data=overall_total2017, aes(x=Month, y=VictimRate, group=Police.District,color=Police.District)) + geom_line(size=1.5)
+p +labs(title = "Total victimisation rate 2017 Across 3 Regions (Jan-Dec)",x = "Month",y = "Victimisation Rate")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+
+p <- ggplot(data=overall_total2018, aes(x=Month, y=VictimRate, group=Police.District,color=Police.District)) + geom_line(size=1.5)
+p +labs(title = "Total victimisation rate 2018 Across 3 Regions (Jan-Dec)",x = "Month",y = "Victimisation Rate")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+
+p <- ggplot(data=overall_total2019, aes(x=Month, y=VictimRate, group=Police.District,color=Police.District)) + geom_line(size=1.5)
+p +labs(title = "Total victimisation rate 2019 Across 3 Regions (Jan-Dec)",x = "Month",y = "Victimisation Rate")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+
+p <- ggplot(data=overall_total2020, aes(x=Month, y=VictimRate, group=Police.District,color=Police.District)) + geom_line(size=1.5)
+p +labs(title = "Total victimisation rate 2019 Across 3 Regions (Jan-Dec)",x = "Month",y = "Victimisation Rate")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+```
+
+# This General 2015-2019. analysis will still be towards the 3 most populated regions.
+
+
+# Seasonal Time series across 3 regions.
+```{r}
+
+#Create Month numbers to more easily identify.
+year<-rep(c("2015"), times=36)
+year<-data.frame(year)
+overall_total2015 <-cbind(overall_total2015, year)
+month<-rep(c("2015-01-01","2015-02-01","2015-03-01","2015-04-01","2015-05-01","2015-06-01","2015-07-01","2015-08-01","2015-09-01","2015-10-01","2015-11-01","2015-12-01"), times=3)
+month<-data.frame(month)
+overall_total2015 <-cbind(overall_total2015, month)
+overall_total2015
+
+year<-rep(c("2016"), times=36)
+year<-data.frame(year)
+overall_total2016 <-cbind(overall_total2016, year)
+month<-rep(c("2016-01-01","2016-02-01","2016-03-01","2016-04-01","2016-05-01","2016-06-01","2016-07-01","2016-08-01","2016-09-01","2016-10-01","2016-11-01","2016-12-01"), times=3)
+month<-data.frame(month)
+overall_total2016 <-cbind(overall_total2016, month)
+overall_total2016
+
+year<-rep(c("2017"), times=36)
+year<-data.frame(year)
+overall_total2017 <-cbind(overall_total2017, year)
+month<-rep(c("2017-01-01","2017-02-01","2017-03-01","2017-04-01","2017-05-01","2017-06-01","2017-07-01","2017-08-01","2017-09-01","2017-10-01","2017-11-01","2017-12-01"), times=3)
+month<-data.frame(month)
+overall_total2017 <-cbind(overall_total2017, month)
+overall_total2017
+
+year<-rep(c("2018"), times=36)
+year<-data.frame(year)
+overall_total2018 <-cbind(overall_total2018, year)
+month<-rep(c("2018-01-01","2018-02-01","2018-03-01","2018-04-01","2018-05-01","2018-06-01","2018-07-01","2018-08-01","2018-09-01","2018-10-01","2018-11-01","2018-12-01"), times=3)
+month<-data.frame(month)
+overall_total2018 <-cbind(overall_total2018, month)
+overall_total2018
+
+year<-rep(c("2019"), times=36)
+year<-data.frame(year)
+overall_total2019 <-cbind(overall_total2019, year)
+month<-rep(c("2019-01-01","2019-02-01","2019-03-01","2019-04-01","2019-05-01","2019-06-01","2019-07-01","2019-08-01","2019-09-01","2019-10-01","2019-11-01","2019-12-01"), times=3)
+month<-data.frame(month)
+overall_total2019 <-cbind(overall_total2019, month)
+overall_total2019
+
+year<-rep(c("2020"), times=36)
+year<-data.frame(year)
+overall_total2020 <-cbind(overall_total2020, year)
+month<-rep(c("2020-01-01","2020-02-01","2020-03-01","2020-04-01","2020-05-01","2020-06-01","2020-07-01","2020-08-01","2020-09-01","2020-10-01","2020-11-01","2020-12-01"), times=3)
+month<-data.frame(month)
+overall_total2020 <-cbind(overall_total2020, month)
+overall_total2020
+
+combined = rbind(overall_total2015,overall_total2016,overall_total2017, overall_total2018,overall_total2019)
+combined <- combined[,-c(3)]
+combined
+
+```
+
+# Statistical tests white noise, stationary series test, Ljung-Box test
+
+```{r}
+#import statistical packages.
+library(readr)
+library(forecast)
+library(fpp2)
+library(TTR)
+library(dplyr)
+
+combined<- combined[,c(1,3,5)]
+combined$month_date = as.Date(combined$month)
+combined
+```
+
+```{r}
+aucklandsubset <- combined[grepl("Auckland City", combined[["Police.District"]]), ]
+VictimRate_ts_auckland <- ts(aucklandsubset$VictimRate, start = 2015, end = 2019, freq = 12)
+plot(VictimRate_ts_auckland,main="Auckland Time Series of Victim Rate (2015-2019)")
+Canterburysubset <- combined[grepl("Canterbury", combined[["Police.District"]]), ]
+VictimRate_ts_Canterbury <- ts(Canterburysubset$VictimRate, start = 2015, end = 2019, freq = 12)
+plot(VictimRate_ts_Canterbury ,main="Canterbury Time Series of Victim Rate (2015-2019)")
+Wellingtonsubset <- combined[grepl("Wellington", combined[["Police.District"]]), ]
+VictimRate_ts_Wellington <- ts(Wellingtonsubset$VictimRate, start = 2015, end = 2019, freq = 12)
+plot(VictimRate_ts_Wellington ,main="Wellington Time Series of Victim Rate (2015-2019)")
+
+
+plot(aucklandsubset$month_date,                              # Draw first time series
+     aucklandsubset$VictimRate,
+     type = "l",
+     col = 2,
+     ylim = c(0, 0.010),
+     xlab = "Year",
+     ylab = "Victim Rates",lwd = 4,main="Time Series of Victim Rates Across 3 regions (2015-2019)")
+lines(aucklandsubset$month_date,                             # Draw second time series
+      Canterburysubset$VictimRate,
+      type = "l",
+      col = 3,lwd = 1)
+lines(aucklandsubset$month_date,                             # Draw third time series
+      Wellingtonsubset$VictimRate,
+      type = "l",
+      col = 4,
+       lty = 2)
+legend("topright",                           # Add legend to plot
+       c("Auckland", "Canterbury", "Wellington"), lty = c(2,1), lwd = c(4,1,1),
+       col = 2:4)
+```
+
+```{r, fig.cap="Time series plot for Auckland, wellington and canterbury"}
+#seperate part
+auckland_decomp <- decompose(VictimRate_ts_auckland)
+Canterbury_decomp <- decompose(VictimRate_ts_Canterbury)
+Wellington_decomp <- decompose(VictimRate_ts_Wellington)
+
+plot(auckland_decomp)
+plot(Canterbury_decomp)
+plot(Wellington_decomp)
+
+```
+
+
+Holt’s Winters Exponential Smoothing¶
+If you have a time series that can be described using an additive model with increasing or decreasing trend and with seasonality, you can use Holt’s exponential smoothing to make short-term forecasts.
+
+```{r}
+#To estimate the trend, seasonal and irregular components of this time series, we type:
+souvenirtimeseriesforecasts_auckland <- HoltWinters(VictimRate_ts_auckland, gamma=FALSE)
+souvenirtimeseriesforecasts_Wellington <- HoltWinters(VictimRate_ts_Wellington, gamma=FALSE)
+souvenirtimeseriesforecasts_Canterbury <- HoltWinters(VictimRate_ts_Canterbury, gamma=FALSE)
+souvenirtimeseriesforecasts_auckland
+souvenirtimeseriesforecasts_Wellington
+souvenirtimeseriesforecasts_Canterbury
+```
+
+```{r}
+souvenirtimeseriesforecasts_auckland$SSE
+souvenirtimeseriesforecasts_Wellington$SSE
+souvenirtimeseriesforecasts_Canterbury$SSE
+```
+
+
+```{r, fig.width = 13, fig.cap="Fitted from 2015-2020 for each region",echo=FALSE}
+plot(souvenirtimeseriesforecasts_auckland, main="fitted holt-winters auckland")
+plot(souvenirtimeseriesforecasts_Wellington, main="fitted holt-winters Wellington")
+plot(souvenirtimeseriesforecasts_Canterbury, main="fitted holt-winters Canterbury")
+
+old.par <- par(mfrow=c(2,2))
+plot(souvenirtimeseriesforecasts_auckland, main="fitted holt-winters auckland(black observed/red fitted)")
+plot(souvenirtimeseriesforecasts_Wellington, main="fitted holt-winters Wellington(black observed/red fitted)")
+plot(souvenirtimeseriesforecasts_Canterbury, main='fitted holt-winters Canterbury(black observed/red fitted)')
+par(old.par)
+```
+
+
+
+To make forecasts for future times not included in the original time series, we use the “forecast.HoltWinters()” function in the “forecast” package.
+
+```{r, fig.width = 13}
+
+souvenirtimeseriesforecasts1_auckland <- forecast:::forecast.HoltWinters(souvenirtimeseriesforecasts_auckland, h=12)
+forecast:::plot.forecast(souvenirtimeseriesforecasts1_auckland)
+souvenirtimeseriesforecasts2_Wellington <- forecast:::forecast.HoltWinters(souvenirtimeseriesforecasts_Wellington, h=12)
+forecast:::plot.forecast(souvenirtimeseriesforecasts2_Wellington )
+souvenirtimeseriesforecasts3_Canterbury <- forecast:::forecast.HoltWinters(souvenirtimeseriesforecasts_Canterbury, h=12)
+forecast:::plot.forecast(souvenirtimeseriesforecasts3_Canterbury)
+
+old.par <- par(mfrow=c(2,2))
+plot(souvenirtimeseriesforecasts1_auckland, main="forecasts for auckland",xlab = "Year",ylab = "Victim Rates")
+plot(souvenirtimeseriesforecasts2_Wellington, main="forecasts for Wellington",xlab = "Year",ylab = "Victim Rates")
+plot(souvenirtimeseriesforecasts3_Canterbury, main='forecasts for Canterbury',xlab = "Year",ylab = "Victim Rates")
+par(old.par)
+```
+
+We can investigate whether the predictive model can be improved upon by 
+checking whether the in-sample forecast errors show non-zero auto correlations 
+at lags 1-20, by making a correlogram and carrying out the Ljung-Box test:
+
+
+Here the correlogram shows that the sample autocorrelation for the in-sample 
+forecast
+errors at lag 0 exceeds the significance bounds. However, we would expect one 
+in 20 of the autocorrelations for the first twenty lags to exceed the 95% 
+significance bounds by chance alone
+
+```{r}
+one <- acf(souvenirtimeseriesforecasts1_auckland$residuals, lag.max=20, na.action = na.pass)
+two <- acf(souvenirtimeseriesforecasts2_Wellington$residuals, lag.max=20, na.action = na.pass)
+three <- acf(souvenirtimeseriesforecasts3_Canterbury$residuals, lag.max=20, na.action = na.pass)
+
+old.par <- par(mfrow=c(2,2))
+plot(one, main="ACF for auckland",xlab = "Year",ylab = "ACF")
+plot(two , main="ACF for Wellington",xlab = "Year",ylab = "ACF")
+plot(three, main='ACF for Canterbury',xlab = "Year",ylab = "ACF")
+par(old.par)
+```
+hen we carry out the Ljung-Box test, the p-value is 0.9996, indicating that 
+there is evidence of non-zero autocorrelations in the in-sample forecast 
+errors at lags 1-20.
+
+```{r}
+Box.test(souvenirtimeseriesforecasts1_auckland$residuals, lag=20, type="Ljung-Box")
+Box.test(souvenirtimeseriesforecasts2_Wellington$residuals, lag=20, type="Ljung-Box")
+Box.test(souvenirtimeseriesforecasts3_Canterbury$residuals, lag=20, type="Ljung-Box")
+```
+# code for 2021 forecast.
+```{r}
+#2021 forecast
+combined = rbind(overall_total2015,overall_total2016,overall_total2017, overall_total2018,overall_total2019,overall_total2020)
+combined <- combined[,-c(3)]
+combined<- combined[,c(1,3,5)]
+combined$month_date = as.Date(combined$month)
+```
+
+```{r}
+aucklandsubset <- combined[grepl("Auckland City", combined[["Police.District"]]), ]
+VictimRate_ts_auckland <- ts(aucklandsubset$VictimRate, start = 2015, end = 2021, freq = 12)
+plot(VictimRate_ts_auckland,main="Auckland Time Series of Victim Rate (2015-2020)")
+Canterburysubset <- combined[grepl("Canterbury", combined[["Police.District"]]), ]
+VictimRate_ts_Canterbury <- ts(Canterburysubset$VictimRate, start = 2015, end = 2021, freq = 12)
+plot(VictimRate_ts_Canterbury ,main="Canterbury Time Series of Victim Rate (2015-2020)")
+Wellingtonsubset <- combined[grepl("Wellington", combined[["Police.District"]]), ]
+VictimRate_ts_Wellington <- ts(Wellingtonsubset$VictimRate, start = 2015, end = 2021, freq = 12)
+plot(VictimRate_ts_Wellington ,main="Wellington Time Series of Victim Rate (2015-2020)")
+```
+
+```{r}
+#To estimate the trend, seasonal and irregular components of this time series, we type:
+souvenirtimeseriesforecasts_auckland <- HoltWinters(VictimRate_ts_auckland, gamma=FALSE)
+souvenirtimeseriesforecasts_Wellington <- HoltWinters(VictimRate_ts_Wellington, gamma=FALSE)
+souvenirtimeseriesforecasts_Canterbury <- HoltWinters(VictimRate_ts_Canterbury, gamma=FALSE)
+souvenirtimeseriesforecasts_auckland
+souvenirtimeseriesforecasts_Wellington
+souvenirtimeseriesforecasts_Canterbury
+```
+
+```{r, fig.cap="Fitted from 2015-2021 for each region"}
+plot(souvenirtimeseriesforecasts_auckland, main="fitted holt-winters auckland")
+plot(souvenirtimeseriesforecasts_Wellington, main="fitted holt-winters Wellington")
+plot(souvenirtimeseriesforecasts_Canterbury, main="fitted holt-winters Canterbury")
+
+old.par <- par(mfrow=c(2,2))
+plot(souvenirtimeseriesforecasts_auckland, main="fitted holt-winters auckland(black observed/red fitted)")
+plot(souvenirtimeseriesforecasts_Wellington, main="fitted holt-winters Wellington(black observed/red fitted)")
+plot(souvenirtimeseriesforecasts_Canterbury, main='fitted holt-winters Canterbury(black observed/red fitted)')
+par(old.par)
+```
+
+```{r}
+souvenirtimeseriesforecasts1_auckland <- forecast:::forecast.HoltWinters(souvenirtimeseriesforecasts_auckland, h=12)
+forecast:::plot.forecast(souvenirtimeseriesforecasts1_auckland)
+souvenirtimeseriesforecasts2_Wellington <- forecast:::forecast.HoltWinters(souvenirtimeseriesforecasts_Wellington, h=12)
+forecast:::plot.forecast(souvenirtimeseriesforecasts2_Wellington )
+souvenirtimeseriesforecasts3_Canterbury <- forecast:::forecast.HoltWinters(souvenirtimeseriesforecasts_Canterbury, h=12)
+forecast:::plot.forecast(souvenirtimeseriesforecasts3_Canterbury)
+
+old.par <- par(mfrow=c(2,2))
+plot(souvenirtimeseriesforecasts1_auckland, main="forecasts for auckland",xlab = "Year",ylab = "Victim Rates")
+plot(souvenirtimeseriesforecasts2_Wellington, main="forecasts for Wellington",xlab = "Year",ylab = "Victim Rates")
+plot(souvenirtimeseriesforecasts3_Canterbury, main='forecasts for Canterbury',xlab = "Year",ylab = "Victim Rates")
+par(old.par)
+```
+```{r}
+Box.test(souvenirtimeseriesforecasts1_auckland$residuals, lag=20, type="Ljung-Box")
+Box.test(souvenirtimeseriesforecasts2_Wellington$residuals, lag=20, type="Ljung-Box")
+Box.test(souvenirtimeseriesforecasts3_Canterbury$residuals, lag=20, type="Ljung-Box")
+```
+```{r}
+one <- acf(souvenirtimeseriesforecasts1_auckland$residuals, lag.max=20, na.action = na.pass)
+two <- acf(souvenirtimeseriesforecasts2_Wellington$residuals, lag.max=20, na.action = na.pass)
+three <- acf(souvenirtimeseriesforecasts3_Canterbury$residuals, lag.max=20, na.action = na.pass)
+
+old.par <- par(mfrow=c(2,2))
+plot(one, main="ACF for auckland",xlab = "Year",ylab = "ACF")
+plot(two , main="ACF for Wellington",xlab = "Year",ylab = "ACF")
+plot(three, main='ACF for Canterbury',xlab = "Year",ylab = "ACF")
+par(old.par)
+```
+
+
+
